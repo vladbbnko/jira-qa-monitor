@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName":       { "value": "jiraqamonitor" },
+    "location":      { "value": "westeurope" },
+    "jiraBaseUrl":   { "value": "https://jiraeu.epam.com" },
+    "jiraProject":   { "value": "LHHPCOAC" },
+    "jiraUsername":  { "value": "your-email@epam.com" },
+    "jiraApiToken":  { "value": "REPLACE_WITH_YOUR_JIRA_API_TOKEN" },
+    "webhookUrl":    { "value": "REPLACE_WITH_YOUR_WEBHOOK_URL" }
+  }
+}

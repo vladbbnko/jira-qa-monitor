@@ -1,0 +1,9 @@
+bin/
+obj/
+publish/
+deploy.zip
+.azurite/
+local.settings.json
+*.user
+.vs/
+.vscode/

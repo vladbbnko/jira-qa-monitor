@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -12,12 +13,15 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
     public async Task<List<JiraTicket>> GetReadyForQaTicketsAsync()
-        => await QueryTicketsAsync("Ready For QA", "Ready For QA");
+        => await QueryTicketsAsync("Ready For QA", includeHistory: true);
 
     public async Task<List<JiraTicket>> GetVerifiedTicketsAsync()
-        => await QueryTicketsAsync("Verified", "Verified");
+        => await QueryTicketsAsync("Verified", includeHistory: true);
 
-    private async Task<List<JiraTicket>> QueryTicketsAsync(string status, string logLabel)
+    public async Task<List<JiraTicket>> GetClosedTicketsAsync()
+        => await QueryTicketsAsync("Closed", includeHistory: true);
+
+    private async Task<List<JiraTicket>> QueryTicketsAsync(string status, bool includeHistory)
     {
         var baseUrl  = config["Jira__BaseUrl"]  ?? Environment.GetEnvironmentVariable("Jira__BaseUrl")  ?? throw new InvalidOperationException("Jira__BaseUrl is not configured");
         var project  = config["Jira__Project"]  ?? Environment.GetEnvironmentVariable("Jira__Project")  ?? throw new InvalidOperationException("Jira__Project is not configured");
@@ -27,10 +31,11 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{apiToken}"));
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
-        var jql = Uri.EscapeDataString($"project = {project} AND status = \"{status}\" AND issuetype in (Bug, Improvement, Story, Sub-bug) ORDER BY created DESC");
-        var url = $"{baseUrl}/rest/api/2/search?jql={jql}&maxResults=50&fields=summary,assignee";
+        var jql    = Uri.EscapeDataString($"project = {project} AND status = \"{status}\" AND issuetype in (Bug, Improvement, Story, Sub-bug, Spike) AND sprint in openSprints() ORDER BY created DESC");
+        var expand = includeHistory ? "&expand=changelog" : string.Empty;
+        var url    = $"{baseUrl}/rest/api/2/search?jql={jql}&maxResults=50&fields=summary,assignee{expand}";
 
-        logger.LogInformation("Querying JIRA [{Label}]: {Url}", logLabel, url);
+        logger.LogInformation("Querying Jira [{Status}]: {Url}", status, url);
 
         HttpResponseMessage response;
         try
@@ -39,30 +44,74 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "HTTP error contacting JIRA [{Label}]", logLabel);
+            logger.LogError(ex, "HTTP error contacting Jira [{Status}]", status);
             throw;
         }
 
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync();
-            logger.LogError("JIRA [{Label}] returned {StatusCode}: {Body}", logLabel, (int)response.StatusCode, body);
-            throw new HttpRequestException($"JIRA error {(int)response.StatusCode}: {body}");
+            logger.LogError("Jira [{Status}] returned {StatusCode}: {Body}", status, (int)response.StatusCode, body);
+            throw new HttpRequestException($"Jira error {(int)response.StatusCode}: {body}");
         }
 
         var content = await response.Content.ReadAsStringAsync();
         var result  = JsonSerializer.Deserialize<JiraSearchResponse>(content, JsonOpts)
-                      ?? throw new InvalidOperationException("Could not deserialize JIRA response");
+                      ?? throw new InvalidOperationException("Could not deserialize Jira response");
 
         var tickets = result.Issues.Select(issue => new JiraTicket(
             Key:           issue.Key,
             Summary:       issue.Fields.Summary,
             Assignee:      issue.Fields.Assignee?.DisplayName ?? "Unassigned",
             AssigneeEmail: issue.Fields.Assignee?.EmailAddress ?? string.Empty,
-            Url:           $"{baseUrl}/browse/{issue.Key}"
+            Url:           $"{baseUrl}/browse/{issue.Key}",
+            StatusHistory: includeHistory ? ExtractLastStints(issue.Changelog, status) : []
         )).ToList();
 
-        logger.LogInformation("JIRA returned {Count} tickets in [{Label}]", tickets.Count, logLabel);
+        logger.LogInformation("Jira returned {Count} tickets in [{Status}]", tickets.Count, status);
         return tickets;
+    }
+
+    // Returns the last continuous stint in each status, in chronological order of exit,
+    // excluding the current status (e.g. "Ready For QA" itself).
+    private static IReadOnlyList<StatusDuration> ExtractLastStints(JiraChangelog? changelog, string currentStatus)
+    {
+        if (changelog is null) return [];
+
+        var transitions = changelog.Histories
+            .SelectMany(h => h.Items
+                .Where(i => i.Field == "status" && i.FromStatus != null && i.ToStatus != null)
+                .Select(i => new
+                {
+                    At   = DateTime.Parse(h.Created, null, DateTimeStyles.RoundtripKind),
+                    From = i.FromStatus!,
+                    To   = i.ToStatus!
+                }))
+            .OrderBy(t => t.At)
+            .ToList();
+
+        if (transitions.Count == 0) return [];
+
+        // Track the last time each status was entered.
+        // When we see a transition away from a status, record (exitedAt, duration).
+        // Overwriting ensures we keep only the last stint.
+        var lastEnteredAt = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        var lastStint     = new Dictionary<string, (DateTime ExitedAt, TimeSpan Duration)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var t in transitions)
+        {
+            if (lastEnteredAt.TryGetValue(t.From, out var enteredAt))
+                lastStint[t.From] = (t.At, t.At - enteredAt);
+
+            lastEnteredAt[t.To] = t.At;
+        }
+
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentStatus, "Reopened" };
+
+        return lastStint
+            .Where(kvp => !ignored.Contains(kvp.Key))
+            .OrderBy(kvp => kvp.Value.ExitedAt)
+            .Select(kvp => new StatusDuration(kvp.Key, kvp.Value.Duration))
+            .ToList();
     }
 }

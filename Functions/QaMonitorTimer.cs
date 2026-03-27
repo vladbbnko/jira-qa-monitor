@@ -19,6 +19,7 @@ public class QaMonitorTimer(
 
         await ProcessReadyForQaAsync(state);
         await ProcessVerifiedAsync(state);
+        await ProcessClosedAsync(state);
 
         await stateService.SaveStateAsync(state);
     }
@@ -60,6 +61,7 @@ public class QaMonitorTimer(
 
     // ── Verified ──────────────────────────────────────────────────────────────
 
+
     private async Task ProcessVerifiedAsync(Models.MonitorState state)
     {
         List<Models.JiraTicket> tickets;
@@ -90,6 +92,41 @@ public class QaMonitorTimer(
             logger.LogInformation("Verified: {Total} total, 0 new.", tickets.Count);
         else
             logger.LogInformation("Verified: {Total} total, {New} new: {Keys}. Sent: {Sent}, failed: {Failed}.",
+                tickets.Count, newTickets.Count, string.Join(", ", newTickets.Select(t => t.Key)), sent, failed);
+    }
+
+    // ── Closed ────────────────────────────────────────────────────────────────
+
+    private async Task ProcessClosedAsync(Models.MonitorState state)
+    {
+        List<Models.JiraTicket> tickets;
+        try
+        {
+            tickets = await jiraService.GetClosedTicketsAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Jira [Closed] search failed — state not updated");
+            return;
+        }
+
+        var newTickets = tickets.Where(t => !state.ClosedIds.Contains(t.Key)).ToList();
+
+        int sent = 0, failed = 0;
+        foreach (var ticket in newTickets)
+        {
+            var success = await webhookService.SendClosedAsync(ticket);
+            if (success) sent++;
+            else         failed++;
+        }
+
+        // Closed is permanent — only accumulate, never remove
+        state.ClosedIds.AddRange(newTickets.Select(t => t.Key));
+
+        if (newTickets.Count == 0)
+            logger.LogInformation("Closed: {Total} total, 0 new.", tickets.Count);
+        else
+            logger.LogInformation("Closed: {Total} total, {New} new: {Keys}. Sent: {Sent}, failed: {Failed}.",
                 tickets.Count, newTickets.Count, string.Join(", ", newTickets.Select(t => t.Key)), sent, failed);
     }
 }

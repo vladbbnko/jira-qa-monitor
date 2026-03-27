@@ -31,9 +31,9 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{apiToken}"));
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
-        var jql    = Uri.EscapeDataString($"project = {project} AND status = \"{status}\" AND issuetype in (Bug, Improvement, Story, Sub-bug, Spike) AND sprint in openSprints() ORDER BY created DESC");
+        var jql    = Uri.EscapeDataString($"project = {project} AND status = \"{status}\" AND issuetype in (Bug, Improvement, Story, Spike) AND sprint in openSprints() ORDER BY created DESC");
         var expand = includeHistory ? "&expand=changelog" : string.Empty;
-        var url    = $"{baseUrl}/rest/api/2/search?jql={jql}&maxResults=50&fields=summary,assignee{expand}";
+        var url    = $"{baseUrl}/rest/api/2/search?jql={jql}&maxResults=50&fields=summary,assignee,customfield_10004{expand}";
 
         logger.LogInformation("Querying Jira [{Status}]: {Url}", status, url);
 
@@ -65,7 +65,8 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
             Assignee:      issue.Fields.Assignee?.DisplayName ?? "Unassigned",
             AssigneeEmail: issue.Fields.Assignee?.EmailAddress ?? string.Empty,
             Url:           $"{baseUrl}/browse/{issue.Key}",
-            StatusHistory: includeHistory ? ExtractLastStints(issue.Changelog, status) : []
+            StatusHistory: includeHistory ? ExtractLastStints(issue.Changelog, status) : [],
+            StoryPoints:   issue.Fields.StoryPoints
         )).ToList();
 
         logger.LogInformation("Jira returned {Count} tickets in [{Status}]", tickets.Count, status);

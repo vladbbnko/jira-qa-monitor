@@ -10,7 +10,8 @@ public record JiraTicket(
     string Assignee,
     string AssigneeEmail,
     string Url,
-    IReadOnlyList<StatusDuration> StatusHistory
+    IReadOnlyList<StatusDuration> StatusHistory,
+    double? StoryPoints
 );
 
 public class MonitorState
@@ -34,8 +35,11 @@ public class JiraIssue
 
 public class JiraFields
 {
-    public string Summary { get; set; } = string.Empty;
-    public JiraAssignee? Assignee { get; set; }
+    public string       Summary     { get; set; } = string.Empty;
+    public JiraAssignee? Assignee   { get; set; }
+
+    [JsonPropertyName("customfield_10004")]
+    public double? StoryPoints { get; set; }
 }
 
 public class JiraAssignee

@@ -31,16 +31,16 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 
 ## Card Previews
 
-**🔔 Ready For QA** (blue)
+**🔔 Ready For QA** — `accent` blue background, white text
 ```
 ┌──────────────────────────────────────────────┐
-│  🔔  READY FOR QA                            │
-│  👀 Awaiting your testing                    │
+│  🔔  READY FOR QA                            │  ← blue header
+│  Awaiting your testing! 👀                   │
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
-│  👤 Assignee              @John Smith        │
+│  👤 Assignee              @John Smith        │  ← real Teams mention
 ├──────────────────────────────────────────────┤
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
@@ -50,10 +50,10 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 └──────────────────────────────────────────────┘
 ```
 
-**✅ Verified** (green)
+**✅ Verified** — `good` green background, dark text
 ```
 ┌──────────────────────────────────────────────┐
-│  ✅  VERIFIED — READY TO CLOSE               │
+│  ✅  VERIFIED — READY TO CLOSE               │  ← green header
 │  Almost there! 💪                            │
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │
@@ -72,10 +72,10 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 └──────────────────────────────────────────────┘
 ```
 
-**🎉 Closed** (gold)
+**🎉 Closed** — `warning` gold background, dark text
 ```
 ┌──────────────────────────────────────────────┐
-│  🎉  CLOSED — GREAT WORK!                    │
+│  🎉  CLOSED — GREAT WORK!                    │  ← gold header
 │  Another one bites the dust! 🚀              │
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │
@@ -87,6 +87,8 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  In Progress              3d 2h              │
 │  Ready For QA             4h 10m             │
 │  Verified                 2h 26m             │
+├──────────────────────────────────────────────┤
+│  🏆 Story Points                           5 │  ← shown only if set
 ├──────────────────────────────────────────────┤
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
@@ -214,7 +216,7 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 
 ## Tracked Issue Types
 
-By default the function tracks: `Bug`, `Improvement`, `Story`, `Sub-bug`, `Spike`.
+By default the function tracks: `Bug`, `Improvement`, `Story`, `Spike`.
 
 Only tickets in the **active sprint** are tracked (`sprint in openSprints()`).
 

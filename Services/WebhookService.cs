@@ -20,7 +20,7 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
 
         var body = new List<object>
         {
-            BuildHeader("🔔  READY FOR QA", "👀 Awaiting your testing", "Accent"),
+            BuildHeader("🔔  READY FOR QA", "Awaiting your testing! 👀", "accent"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
@@ -40,7 +40,7 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
 
         var body = new List<object>
         {
-            BuildHeader("✅  VERIFIED — READY TO CLOSE", "Almost there! 💪", "Good"),
+            BuildHeader("✅  VERIFIED — READY TO CLOSE", "Almost there! 💪", "good"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
@@ -70,11 +70,13 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
 
         var body = new List<object>
         {
-            BuildHeader("🎉  CLOSED — GREAT WORK!", "Another one bites the dust! 🚀", "Attention"),
+            BuildHeader("🎉  CLOSED — GREAT WORK!", "Another one bites the dust! 🚀", "warning"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText, label: "👤 Closed by")
         };
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
+        if (ticket.StoryPoints.HasValue && ticket.StoryPoints.Value > 0)
+            body.Add(BuildStoryPoints(ticket.StoryPoints.Value));
 
         var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
@@ -90,12 +92,15 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
         return (has, text, entry);
     }
 
-    private static object BuildHeader(string title, string subtitle, string color) => new
+    private static object BuildHeader(string title, string subtitle, string style) => new
     {
-        type  = "Container",
-        items = new object[]
+        type    = "Container",
+        style   = style,
+        bleed   = true,
+        spacing = "None",
+        items   = new object[]
         {
-            new { type = "TextBlock", text = title,    weight = "Bolder", size = "Large", color, wrap = true },
+            new { type = "TextBlock", text = title,    weight = "Bolder", size = "Large", wrap = true },
             new { type = "TextBlock", text = subtitle, size   = "Small",  wrap = true,    spacing = "None", isSubtle = true }
         }
     };
@@ -138,6 +143,18 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
             facts = filtered.Select(s => new { title = s.Status, value = FormatDuration(s.Duration) }).ToArray()
         };
     }
+
+    private static object BuildStoryPoints(double points) => new
+    {
+        type      = "ColumnSet",
+        spacing   = "Medium",
+        separator = true,
+        columns   = new object[]
+        {
+            new { type = "Column", width = "auto",    items = new object[] { new { type = "TextBlock", text = "🏆 Story Points",                       weight = "Bolder", wrap = false } } },
+            new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = ((int)points).ToString(), wrap = false, horizontalAlignment = "Right", weight = "Bolder", color = "Good" } } }
+        }
+    };
 
     private static object BuildPayload(bool hasMention, object mentionEntry, List<object> body, string url) => new
     {

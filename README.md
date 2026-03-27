@@ -1,5 +1,15 @@
 # Jira QA Monitor — Azure Function
 
+## The Problem
+
+In teams that rely on Jira for task tracking and Microsoft Teams for communication, critical workflow transitions often go unnoticed. A ticket sitting in **Ready For QA** for hours while the QA engineer is unaware, a **Verified** ticket waiting to be closed while the developer has forgotten about it, or a shipped feature that nobody celebrated — these are everyday friction points that slow down delivery and reduce team morale.
+
+Manually checking Jira boards, setting up watchers, or relying on people to remember to notify the right person at the right time is error-prone and adds cognitive overhead.
+
+**Jira QA Monitor** solves this by automatically watching your Jira board and pushing targeted, beautiful Microsoft Teams notifications at every key transition — so the right person is pinged at the right moment, no manual effort required.
+
+---
+
 An Azure Timer Function that monitors a Jira project for tickets changing status and sends **Microsoft Teams Adaptive Card** notifications via Power Automate webhook.
 
 **Three notification channels out of the box:**
@@ -214,13 +224,27 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 
 ---
 
-## Tracked Issue Types
+## Customization
 
-By default the function tracks: `Bug`, `Improvement`, `Story`, `Spike`.
+All monitoring rules live in `Services/JiraService.cs` and can be freely adjusted to match your team's workflow.
 
-Only tickets in the **active sprint** are tracked (`sprint in openSprints()`).
+**Tracked issue types** — by default: `Bug`, `Improvement`, `Story`, `Spike`:
+```csharp
+AND issuetype in (Bug, Improvement, Story, Spike)
+```
 
-To change this, update the JQL in `Services/JiraService.cs`.
+**Monitored statuses** — the three tracked statuses map directly to your Jira workflow names. If your board uses different status names (e.g. `"In Review"` instead of `"Ready For QA"`, or `"Done"` instead of `"Closed"`), just update the strings passed to `QueryTicketsAsync`:
+```csharp
+public Task<List<JiraTicket>> GetReadyForQaTicketsAsync() => QueryTicketsAsync("Ready For QA", ...);
+public Task<List<JiraTicket>> GetVerifiedTicketsAsync()   => QueryTicketsAsync("Verified", ...);
+public Task<List<JiraTicket>> GetClosedTicketsAsync()     => QueryTicketsAsync("Closed", ...);
+```
+
+**Sprint filter** — only active sprint tickets are tracked by default:
+```csharp
+AND sprint in openSprints()
+```
+Remove this clause if you want to track tickets across all sprints.
 
 ---
 

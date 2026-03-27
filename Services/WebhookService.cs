@@ -70,7 +70,7 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
 
         var body = new List<object>
         {
-            BuildHeader("🎉  CLOSED — GREAT WORK!", "Another one bites the dust! 🚀", "Warning"),
+            BuildHeader("🎉  CLOSED — GREAT WORK!", "Another one bites the dust! 🚀", "Attention"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText, label: "👤 Closed by")
         };

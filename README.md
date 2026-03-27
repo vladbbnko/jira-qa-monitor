@@ -2,11 +2,16 @@
 
 An Azure Timer Function that monitors a Jira project for tickets changing status and sends **Microsoft Teams Adaptive Card** notifications via Power Automate webhook.
 
-**Two notification channels out of the box:**
+**Three notification channels out of the box:**
 - 🔔 **Ready For QA** — notifies the team when a ticket is ready to be tested
 - ✅ **Verified** — notifies the assignee when a ticket is verified and ready to be closed (with a PR merge reminder)
+- 🎉 **Closed** — celebrates the team when a ticket is shipped
 
-Tickets are tracked by state so each ticket is only reported **once per status**. Supports `@mention` of the assignee directly in the card.
+Each card includes:
+- `@mention` of the assignee (real Teams ping)
+- **Time spent in previous statuses** (e.g. In Progress: 3d 2h, Ready For QA: 4h 10m)
+
+Tickets are tracked by state so each ticket is only notified **once per status**.
 
 ---
 
@@ -15,45 +20,76 @@ Tickets are tracked by state so each ticket is only reported **once per status**
 ```
 Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
     │
-    ├─► Jira REST API        →  fetch tickets by status
+    ├─► Jira REST API        →  fetch tickets by status + changelog
     ├─► Azure Blob Storage   →  load / save state.json
     ├─► Power Automate Webhook (Ready For QA)  →  Teams card per new ticket
-    └─► Power Automate Webhook (Verified)      →  Teams card per new ticket
+    ├─► Power Automate Webhook (Verified)      →  Teams card per new ticket
+    └─► Power Automate Webhook (Closed)        →  Teams card per new ticket
 ```
 
 ---
 
 ## Card Previews
 
-**Ready For QA**
+**🔔 Ready For QA** (blue)
 ```
-┌─────────────────────────────────────────┐
-│  🔔  READY FOR QA                       │  ← blue header
-├─────────────────────────────────────────┤
-│  PROJECT-123                            │
-│  Short ticket summary here              │
-├─────────────────────────────────────────┤
-│  👤 Assignee              @John Smith   │  ← real Teams mention
-├─────────────────────────────────────────┤
-│  [ Open in Jira → ]                     │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  🔔  READY FOR QA                            │
+│  👀 Awaiting your testing                    │
+├──────────────────────────────────────────────┤
+│  PROJECT-123                                 │
+│  Short ticket summary here                   │
+├──────────────────────────────────────────────┤
+│  👤 Assignee              @John Smith        │
+├──────────────────────────────────────────────┤
+│  📊 Time in previous statuses                │
+│  In Progress              3d 2h              │
+│  Code Review              1d 4h              │
+├──────────────────────────────────────────────┤
+│  [ Open in Jira → ]                          │
+└──────────────────────────────────────────────┘
 ```
 
-**Verified — Ready To Close**
+**✅ Verified** (green)
 ```
-┌─────────────────────────────────────────┐
-│  ✅  VERIFIED — READY TO CLOSE          │  ← green header
-├─────────────────────────────────────────┤
-│  PROJECT-123                            │
-│  Short ticket summary here              │
-├─────────────────────────────────────────┤
-│  👤 Assignee              @John Smith   │
-├─────────────────────────────────────────┤
-│  🔀 Please merge all related PRs        │
-│     before closing this ticket          │
-├─────────────────────────────────────────┤
-│  [ Open in Jira → ]                     │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  ✅  VERIFIED — READY TO CLOSE               │
+│  Almost there! 💪                            │
+├──────────────────────────────────────────────┤
+│  PROJECT-123                                 │
+│  Short ticket summary here                   │
+├──────────────────────────────────────────────┤
+│  👤 Assignee              @John Smith        │
+├──────────────────────────────────────────────┤
+│  📊 Time in previous statuses                │
+│  In Progress              3d 2h              │
+│  Ready For QA             4h 10m             │
+├──────────────────────────────────────────────┤
+│  🔀 Please merge all related PRs             │
+│     before closing this ticket               │
+├──────────────────────────────────────────────┤
+│  [ Open in Jira → ]                          │
+└──────────────────────────────────────────────┘
+```
+
+**🎉 Closed** (gold)
+```
+┌──────────────────────────────────────────────┐
+│  🎉  CLOSED — GREAT WORK!                    │
+│  Another one bites the dust! 🚀              │
+├──────────────────────────────────────────────┤
+│  PROJECT-123                                 │
+│  Short ticket summary here                   │
+├──────────────────────────────────────────────┤
+│  👤 Closed by             @John Smith        │
+├──────────────────────────────────────────────┤
+│  📊 Time in previous statuses                │
+│  In Progress              3d 2h              │
+│  Ready For QA             4h 10m             │
+│  Verified                 2h 26m             │
+├──────────────────────────────────────────────┤
+│  [ Open in Jira → ]                          │
+└──────────────────────────────────────────────┘
 ```
 
 ---
@@ -89,6 +125,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
        "Jira__ApiToken": "your-jira-api-token",
        "Webhook__ReadyForQaUrl": "https://your-power-automate-webhook-url",
        "Webhook__VerifiedUrl": "https://your-power-automate-webhook-url",
+       "Webhook__ClosedUrl": "https://your-power-automate-webhook-url",
        "State__ContainerName": "jira-qa-monitor",
        "State__BlobName": "state.json"
      }
@@ -118,13 +155,13 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 ## Deploy to Azure (Portal UI)
 
 ### 1. Create a Storage Account
-- Create a **Storage Account** in your resource group
+- Create a **Storage Account** in your resource group (LRS is enough)
 - Inside it, create a **Blob Container** named `jira-qa-monitor`
 
 ### 2. Create a Function App
 - **Runtime:** .NET 8 (isolated worker)
 - **OS:** Linux
-- **Plan:** Consumption (pay-as-you-go)
+- **Plan:** Consumption (pay-as-you-go, effectively free for this workload)
 - Link it to the storage account above
 
 ### 3. Configure Environment Variables
@@ -136,8 +173,9 @@ Go to **Function App → Settings → Environment variables** and add:
 | `Jira__Project` | your Jira project key |
 | `Jira__Username` | your Jira email |
 | `Jira__ApiToken` | your Jira API token |
-| `Webhook__ReadyForQaUrl` | Power Automate webhook URL for Ready For QA channel |
-| `Webhook__VerifiedUrl` | Power Automate webhook URL for Verified channel |
+| `Webhook__ReadyForQaUrl` | Power Automate webhook for Ready For QA channel |
+| `Webhook__VerifiedUrl` | Power Automate webhook for Verified channel |
+| `Webhook__ClosedUrl` | Power Automate webhook for Closed channel |
 | `State__BlobConnectionString` | connection string of your storage account |
 | `State__ContainerName` | `jira-qa-monitor` |
 | `State__BlobName` | `state.json` |
@@ -150,8 +188,10 @@ cd publish && zip -r ../deploy.zip . && cd ..
 
 Then in the Azure Portal go to **Function App → Development Tools → Advanced Tools → Kudu → Tools → Zip Push Deploy** and drag & drop `deploy.zip`.
 
+> **Note:** Kudu is available on Consumption and Premium plans. It is not available on Flex Consumption.
+
 ### 5. Verify
-Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invocation logs and confirm it's running.
+Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invocation logs.
 
 ---
 
@@ -165,6 +205,7 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 | `Jira__ApiToken` | Jira API token | — |
 | `Webhook__ReadyForQaUrl` | Teams webhook for Ready For QA notifications | — |
 | `Webhook__VerifiedUrl` | Teams webhook for Verified notifications | — |
+| `Webhook__ClosedUrl` | Teams webhook for Closed notifications | — |
 | `State__BlobConnectionString` | Azure Storage connection string | — |
 | `State__ContainerName` | Blob container name | `jira-qa-monitor` |
 | `State__BlobName` | State file name | `state.json` |
@@ -173,12 +214,11 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 
 ## Tracked Issue Types
 
-By default the function tracks: `Bug`, `Improvement`, `Story`, `Sub-bug`.
+By default the function tracks: `Bug`, `Improvement`, `Story`, `Sub-bug`, `Spike`.
 
-To change this, update the JQL in `Services/JiraService.cs`:
-```csharp
-AND issuetype in (Bug, Improvement, Story, Sub-bug)
-```
+Only tickets in the **active sprint** are tracked (`sprint in openSprints()`).
+
+To change this, update the JQL in `Services/JiraService.cs`.
 
 ---
 
@@ -199,11 +239,13 @@ Stored in Azure Blob Storage at `{container}/state.json`:
 ```json
 {
   "readyForQaIds": ["PROJECT-123", "PROJECT-456"],
-  "verifiedIds":   ["PROJECT-100", "PROJECT-101"]
+  "verifiedIds":   ["PROJECT-100", "PROJECT-101"],
+  "closedIds":     ["PROJECT-090", "PROJECT-091"]
 }
 ```
 
-Each list is updated on every run. A ticket is only notified **once** — if it moves out of the status and comes back, it will be notified again.
+- `readyForQaIds` and `verifiedIds` are replaced on each run with the current active set — if a ticket leaves and returns to a status it will be notified again.
+- `closedIds` only ever grows — closed tickets are never re-notified.
 
 ---
 

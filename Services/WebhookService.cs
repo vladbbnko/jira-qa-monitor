@@ -152,7 +152,7 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
         columns   = new object[]
         {
             new { type = "Column", width = "auto",    items = new object[] { new { type = "TextBlock", text = "🏆 Story Points",                       weight = "Bolder", wrap = false } } },
-            new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = ((int)points).ToString(), wrap = false, horizontalAlignment = "Right", weight = "Bolder", color = "Good" } } }
+            new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = ((double)points).ToString(), wrap = false, horizontalAlignment = "Right", weight = "Bolder", color = "Good" } } }
         }
     };
 

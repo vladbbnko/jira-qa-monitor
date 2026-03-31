@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using JiraQaMonitor.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -19,19 +20,36 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         => await QueryTicketsAsync("Verified", includeHistory: true);
 
     public async Task<List<JiraTicket>> GetResolvedTicketsAsync()
-        => await QueryTicketsAsync("Resolved.", includeHistory: true);
+    {
+        var tickets = await QueryTicketsAsync("Resolved.", includeHistory: true);
+        var (baseUrl, credentials) = GetConnectionParams();
+
+        var enriched = await Task.WhenAll(tickets.Select(async ticket =>
+        {
+            var prs = await FetchPullRequestsAsync(baseUrl, credentials, ticket.Key);
+            return ticket with { PullRequests = prs };
+        }));
+
+        return [.. enriched];
+    }
 
     public async Task<List<JiraTicket>> GetClosedTicketsAsync()
         => await QueryTicketsAsync("Closed", includeHistory: true);
 
-    private async Task<List<JiraTicket>> QueryTicketsAsync(string status, bool includeHistory)
+    private (string BaseUrl, string Credentials) GetConnectionParams()
     {
         var baseUrl  = config["Jira__BaseUrl"]  ?? Environment.GetEnvironmentVariable("Jira__BaseUrl")  ?? throw new InvalidOperationException("Jira__BaseUrl is not configured");
-        var project  = config["Jira__Project"]  ?? Environment.GetEnvironmentVariable("Jira__Project")  ?? throw new InvalidOperationException("Jira__Project is not configured");
         var username = config["Jira__Username"] ?? Environment.GetEnvironmentVariable("Jira__Username") ?? throw new InvalidOperationException("Jira__Username is not configured");
         var apiToken = config["Jira__ApiToken"] ?? Environment.GetEnvironmentVariable("Jira__ApiToken") ?? throw new InvalidOperationException("Jira__ApiToken is not configured");
-
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{apiToken}"));
+        return (baseUrl, credentials);
+    }
+
+    private async Task<List<JiraTicket>> QueryTicketsAsync(string status, bool includeHistory)
+    {
+        var (baseUrl, credentials) = GetConnectionParams();
+        var project = config["Jira__Project"] ?? Environment.GetEnvironmentVariable("Jira__Project") ?? throw new InvalidOperationException("Jira__Project is not configured");
+
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
         var jql    = Uri.EscapeDataString($"project = {project} AND status = \"{status}\" AND issuetype in (Bug, Improvement, Story, Spike) AND sprint in openSprints() ORDER BY created DESC");
@@ -70,11 +88,48 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
             Url:                    $"{baseUrl}/browse/{issue.Key}",
             StatusHistory:          includeHistory ? ExtractLastStints(issue.Changelog, status) : [],
             StoryPoints:            issue.Fields.StoryPoints,
-            CurrentStatusEnteredAt: includeHistory ? ExtractStatusEnteredAt(issue.Changelog, status) : null
+            CurrentStatusEnteredAt: includeHistory ? ExtractStatusEnteredAt(issue.Changelog, status) : null,
+            PullRequests:           []
         )).ToList();
 
         logger.LogInformation("Jira returned {Count} tickets in [{Status}]", tickets.Count, status);
         return tickets;
+    }
+
+    // ── PR extraction ─────────────────────────────────────────────────────────
+
+    // Matches Azure DevOps PR URLs: dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
+    private static readonly Regex AzurePrRegex = new(
+        @"https://dev\.azure\.com/[^/\s]+/[^/\s]+/_git/([^/\s]+)/pullrequest/(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private async Task<IReadOnlyList<PullRequestInfo>> FetchPullRequestsAsync(string baseUrl, string credentials, string issueKey)
+    {
+        try
+        {
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+            var url      = $"{baseUrl}/rest/api/2/issue/{issueKey}/comment?maxResults=50&orderBy=-created";
+            var response = await httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return [];
+
+            var content  = await response.Content.ReadAsStringAsync();
+            var result   = JsonSerializer.Deserialize<JiraCommentsResponse>(content, JsonOpts);
+            if (result is null) return [];
+
+            return result.Comments
+                .SelectMany(c => AzurePrRegex.Matches(c.Body))
+                .Select(m => new PullRequestInfo(
+                    RepoName: m.Groups[1].Value,
+                    Url:      m.Value,
+                    PrNumber: int.Parse(m.Groups[2].Value)))
+                .DistinctBy(pr => pr.Url)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch comments for {Key} — skipping PR extraction", issueKey);
+            return [];
+        }
     }
 
     // Returns the last continuous stint in each status, in chronological order of exit,

@@ -38,9 +38,12 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        if (teamTag is not null)
-            body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
+        // TODO: re-enable once Teams tag IDs are configured
+        // if (teamTag is not null)
+        //     body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
+        if (ticket.PullRequests.Count > 0)
+            body.AddRange(BuildPrSection(ticket.PullRequests));
 
         var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
@@ -57,8 +60,9 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        if (teamTag is not null)
-            body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
+        // TODO: re-enable once Teams tag IDs are configured
+        // if (teamTag is not null)
+        //     body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
 
         var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
@@ -177,6 +181,16 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = tagMentionText, wrap = false, horizontalAlignment = "Right", color = "Accent" } } }
         }
     };
+
+    private static IEnumerable<object> BuildPrSection(IReadOnlyList<PullRequestInfo> prs)
+    {
+        yield return new { type = "TextBlock", text = "🔀 Pull Requests", weight = "Bolder", spacing = "Medium", separator = true };
+        yield return new
+        {
+            type  = "FactSet",
+            facts = prs.Select(pr => new { title = pr.RepoName, value = $"[PR #{pr.PrNumber}]({pr.Url})" }).ToArray()
+        };
+    }
 
     private static IEnumerable<object> BuildHistorySection(IReadOnlyList<StatusDuration> history)
     {

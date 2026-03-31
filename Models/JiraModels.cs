@@ -4,6 +4,8 @@ namespace JiraQaMonitor.Models;
 
 public record StatusDuration(string Status, TimeSpan Duration);
 
+public record PullRequestInfo(string RepoName, string Url, int PrNumber);
+
 public record JiraTicket(
     string Key,
     string Summary,
@@ -12,7 +14,8 @@ public record JiraTicket(
     string Url,
     IReadOnlyList<StatusDuration> StatusHistory,
     double?  StoryPoints,
-    DateTime? CurrentStatusEnteredAt
+    DateTime? CurrentStatusEnteredAt,
+    IReadOnlyList<PullRequestInfo> PullRequests
 );
 
 public class ResolvedEntry
@@ -117,4 +120,14 @@ public class JiraHistoryItem
 
     [JsonPropertyName("toString")]
     public string? ToStatus { get; set; }
+}
+
+public class JiraCommentsResponse
+{
+    public List<JiraCommentBody> Comments { get; set; } = [];
+}
+
+public class JiraCommentBody
+{
+    public string Body { get; set; } = string.Empty;
 }

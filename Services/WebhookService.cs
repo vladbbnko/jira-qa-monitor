@@ -30,7 +30,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
     public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl, TeamTag? teamTag = null)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        var entities = BuildEntities(mentionEntry, teamTag);
+        // TODO: restore teamTag once Teams tag IDs are configured and Reviewers row is re-enabled
+        var entities = BuildEntities(mentionEntry, null);
 
         var body = new List<object>
         {
@@ -52,7 +53,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
     public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed, TeamTag? teamTag = null)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        var entities = BuildEntities(mentionEntry, teamTag);
+        // TODO: restore teamTag once Teams tag IDs are configured and Reviewers row is re-enabled
+        var entities = BuildEntities(mentionEntry, null);
 
         var body = new List<object>
         {

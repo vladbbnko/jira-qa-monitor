@@ -11,14 +11,56 @@ public record JiraTicket(
     string AssigneeEmail,
     string Url,
     IReadOnlyList<StatusDuration> StatusHistory,
-    double? StoryPoints
+    double?  StoryPoints,
+    DateTime? CurrentStatusEnteredAt
 );
+
+public class ResolvedEntry
+{
+    public string    Key              { get; set; } = string.Empty;
+    public DateTime  EnteredAt        { get; set; }
+    public bool      InitialNotified  { get; set; }
+    public DateTime? LastReminderAt   { get; set; }
+}
 
 public class MonitorState
 {
-    public List<string> ReadyForQaIds { get; set; } = [];
-    public List<string> VerifiedIds   { get; set; } = [];
-    public List<string> ClosedIds     { get; set; } = [];
+    public List<string>        ReadyForQaIds    { get; set; } = [];
+    public List<ResolvedEntry> ResolvedEntries  { get; set; } = [];
+    public List<string>        VerifiedIds      { get; set; } = [];
+    public List<string>        ClosedIds        { get; set; } = [];
+}
+
+public class AppSettings
+{
+    public ReviewReminderSettings ReviewReminder { get; set; } = new();
+}
+
+public class ReviewReminderSettings
+{
+    public double ThresholdHours { get; set; } = 4;
+    public double IntervalHours  { get; set; } = 2;
+}
+
+public class TeamConfig
+{
+    public List<TeamDefinition> Teams    { get; set; } = [];
+    public TeamWebhooks FallbackWebhooks { get; set; } = new();
+}
+
+public class TeamDefinition
+{
+    public string            Name     { get; set; } = string.Empty;
+    public List<string>      Members  { get; set; } = [];
+    public TeamWebhooks      Webhooks { get; set; } = new();
+}
+
+public class TeamWebhooks
+{
+    public string? Resolved   { get; set; }
+    public string? ReadyForQa { get; set; }
+    public string? Verified   { get; set; }
+    public string? Closed     { get; set; }
 }
 
 public class JiraSearchResponse

@@ -24,6 +24,8 @@ var host = new HostBuilder()
         services.AddHttpClient<JiraService>();
         services.AddHttpClient<WebhookService>();
         services.AddSingleton<StateService>();
+        services.AddSingleton<TeamConfigService>();
+        services.AddSingleton<SettingsService>();
     })
     .Build();
 

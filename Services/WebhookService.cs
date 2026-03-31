@@ -6,15 +6,12 @@ using Microsoft.Extensions.Logging;
 
 namespace JiraQaMonitor.Services;
 
-public class WebhookService(HttpClient httpClient, IConfiguration config, ILogger<WebhookService> logger)
+public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logger)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public async Task<bool> SendAsync(JiraTicket ticket)
+    public async Task<bool> SendAsync(JiraTicket ticket, string webhookUrl)
     {
-        var webhookUrl = config["Webhook__ReadyForQaUrl"]
-            ?? Environment.GetEnvironmentVariable("Webhook__ReadyForQaUrl")
-            ?? throw new InvalidOperationException("Webhook__ReadyForQaUrl is not configured");
 
         var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
 
@@ -30,11 +27,39 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendVerifiedAsync(JiraTicket ticket)
+    public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl)
     {
-        var webhookUrl = config["Webhook__VerifiedUrl"]
-            ?? Environment.GetEnvironmentVariable("Webhook__VerifiedUrl")
-            ?? throw new InvalidOperationException("Webhook__VerifiedUrl is not configured");
+        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+
+        var body = new List<object>
+        {
+            BuildHeader("👀  IN REVIEW — NEEDS YOUR EYES", "A PR is waiting for review", "emphasis"),
+            BuildTicketBlock(ticket),
+            BuildAssigneeRow(mentionText)
+        };
+        body.AddRange(BuildHistorySection(ticket.StatusHistory));
+
+        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        return await PostCardAsync(webhookUrl, payload, ticket.Key);
+    }
+
+    public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed)
+    {
+        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+
+        var body = new List<object>
+        {
+            BuildHeader("⏰  STILL IN REVIEW", $"This ticket has been waiting {FormatDuration(elapsed)}", "attention"),
+            BuildTicketBlock(ticket),
+            BuildAssigneeRow(mentionText, label: "👤 Author")
+        };
+
+        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        return await PostCardAsync(webhookUrl, payload, ticket.Key);
+    }
+
+    public async Task<bool> SendVerifiedAsync(JiraTicket ticket, string webhookUrl)
+    {
 
         var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
 
@@ -60,11 +85,8 @@ public class WebhookService(HttpClient httpClient, IConfiguration config, ILogge
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendClosedAsync(JiraTicket ticket)
+    public async Task<bool> SendClosedAsync(JiraTicket ticket, string webhookUrl)
     {
-        var webhookUrl = config["Webhook__ClosedUrl"]
-            ?? Environment.GetEnvironmentVariable("Webhook__ClosedUrl")
-            ?? throw new InvalidOperationException("Webhook__ClosedUrl is not configured");
 
         var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
 

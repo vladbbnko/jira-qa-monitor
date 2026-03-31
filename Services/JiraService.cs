@@ -18,6 +18,9 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
     public async Task<List<JiraTicket>> GetVerifiedTicketsAsync()
         => await QueryTicketsAsync("Verified", includeHistory: true);
 
+    public async Task<List<JiraTicket>> GetResolvedTicketsAsync()
+        => await QueryTicketsAsync("Resolved.", includeHistory: true);
+
     public async Task<List<JiraTicket>> GetClosedTicketsAsync()
         => await QueryTicketsAsync("Closed", includeHistory: true);
 
@@ -60,13 +63,14 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
                       ?? throw new InvalidOperationException("Could not deserialize Jira response");
 
         var tickets = result.Issues.Select(issue => new JiraTicket(
-            Key:           issue.Key,
-            Summary:       issue.Fields.Summary,
-            Assignee:      issue.Fields.Assignee?.DisplayName ?? "Unassigned",
-            AssigneeEmail: issue.Fields.Assignee?.EmailAddress ?? string.Empty,
-            Url:           $"{baseUrl}/browse/{issue.Key}",
-            StatusHistory: includeHistory ? ExtractLastStints(issue.Changelog, status) : [],
-            StoryPoints:   issue.Fields.StoryPoints
+            Key:                    issue.Key,
+            Summary:                issue.Fields.Summary,
+            Assignee:               issue.Fields.Assignee?.DisplayName ?? "Unassigned",
+            AssigneeEmail:          issue.Fields.Assignee?.EmailAddress ?? string.Empty,
+            Url:                    $"{baseUrl}/browse/{issue.Key}",
+            StatusHistory:          includeHistory ? ExtractLastStints(issue.Changelog, status) : [],
+            StoryPoints:            issue.Fields.StoryPoints,
+            CurrentStatusEnteredAt: includeHistory ? ExtractStatusEnteredAt(issue.Changelog, status) : null
         )).ToList();
 
         logger.LogInformation("Jira returned {Count} tickets in [{Status}]", tickets.Count, status);
@@ -102,17 +106,53 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         foreach (var t in transitions)
         {
             if (lastEnteredAt.TryGetValue(t.From, out var enteredAt))
-                lastStint[t.From] = (t.At, t.At - enteredAt);
+                lastStint[t.From] = (t.At, BusinessDuration(enteredAt, t.At));
 
             lastEnteredAt[t.To] = t.At;
         }
 
         var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentStatus, "Reopened" };
 
+
         return lastStint
             .Where(kvp => !ignored.Contains(kvp.Key))
             .OrderBy(kvp => kvp.Value.ExitedAt)
             .Select(kvp => new StatusDuration(kvp.Key, kvp.Value.Duration))
             .ToList();
+    }
+
+    // Returns the last time the ticket transitioned INTO the given status.
+    private static DateTime? ExtractStatusEnteredAt(JiraChangelog? changelog, string status)
+    {
+        if (changelog is null) return null;
+
+        return changelog.Histories
+            .SelectMany(h => h.Items
+                .Where(i => i.Field == "status" && string.Equals(i.ToStatus, status, StringComparison.OrdinalIgnoreCase))
+                .Select(_ => DateTime.Parse(h.Created, null, DateTimeStyles.RoundtripKind)))
+            .OrderByDescending(d => d)
+            .FirstOrDefault() is DateTime dt ? dt : null;
+    }
+
+    // Calculates duration between two timestamps counting only weekday hours.
+    private static TimeSpan BusinessDuration(DateTime start, DateTime end)
+    {
+        if (start >= end) return TimeSpan.Zero;
+
+        var total   = TimeSpan.Zero;
+        var current = start;
+
+        while (current < end)
+        {
+            var nextMidnight = current.Date.AddDays(1);
+            var periodEnd    = nextMidnight < end ? nextMidnight : end;
+
+            if (current.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday)
+                total += periodEnd - current;
+
+            current = nextMidnight;
+        }
+
+        return total;
     }
 }

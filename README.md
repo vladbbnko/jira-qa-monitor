@@ -52,13 +52,14 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 **👀 In Review** — `emphasis` dark gray
 ```
 ┌──────────────────────────────────────────────┐
-│  👀  IN REVIEW — NEEDS YOUR EYES             │  ← gray header
-│  A PR is waiting for review                  │
+│  👀  READY FOR REVIEW — YOUR TURN!           │  ← gray header
+│  This ticket is waiting for your review! 🔍  │
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
 │  👤 Assignee              @John Smith        │
+│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag set in teams.json
 ├──────────────────────────────────────────────┤
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
@@ -70,13 +71,14 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 **⏰ Still In Review (reminder)** — `attention` red, fires after threshold + repeats on interval
 ```
 ┌──────────────────────────────────────────────┐
-│  ⏰  STILL IN REVIEW                         │  ← red header
-│  This ticket has been waiting 6h 30m         │  ← actual business hours elapsed
+│  ⏰  STILL IN REVIEW — HURRY UP!             │  ← red header
+│  This ticket has been in review for 6h 30m ⏳│  ← actual business hours elapsed
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
-│  👤 Author                @John Smith        │
+│  👤 Assignee              @John Smith        │
+│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag set in teams.json
 ├──────────────────────────────────────────────┤
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
@@ -85,7 +87,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 **🔔 Ready For QA** — `accent` blue
 ```
 ┌──────────────────────────────────────────────┐
-│  🔔  READY FOR QA                            │  ← blue header
+│  🔔  READY FOR QA — DO YOUR BEST!            │  ← blue header
 │  Awaiting your testing! 👀                   │
 ├──────────────────────────────────────────────┤
 │  PROJECT-123                                 │

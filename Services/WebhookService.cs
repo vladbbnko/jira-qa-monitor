@@ -17,7 +17,7 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
 
         var body = new List<object>
         {
-            BuildHeader("🔔  READY FOR QA", "Awaiting your testing! 👀", "accent"),
+            BuildHeader("🔔  READY FOR QA — DO YOUR BEST!", "Awaiting your testing! 👀", "accent"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
@@ -34,7 +34,7 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
 
         var body = new List<object>
         {
-            BuildHeader("👀  IN REVIEW — NEEDS YOUR EYES", "A PR is waiting for review", "emphasis"),
+            BuildHeader("👀  READY FOR REVIEW — YOUR TURN!", "This ticket is waiting for your review! 🔍", "emphasis"),
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
@@ -53,9 +53,9 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
 
         var body = new List<object>
         {
-            BuildHeader("⏰  STILL IN REVIEW", $"This ticket has been waiting {FormatDuration(elapsed)}", "attention"),
+            BuildHeader("⏰  STILL IN REVIEW — HURRY UP!", $"This ticket has been in review for {FormatDuration(elapsed)} ⏳", "attention"),
             BuildTicketBlock(ticket),
-            BuildAssigneeRow(mentionText, label: "👤 Author")
+            BuildAssigneeRow(mentionText)
         };
         if (teamTag is not null)
             body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));

@@ -80,6 +80,10 @@ public class QaMonitorTimer(
 
             var entry = state.ResolvedEntries.FirstOrDefault(e => e.Key == ticket.Key);
 
+            var teamTag = teamConfig is not null
+                ? teamConfigService.ResolveTeam(teamConfig, ticket.AssigneeEmail)?.ResolvedTag
+                : null;
+
             if (entry is null)
             {
                 // First time seeing this ticket in Resolved. — send initial card
@@ -88,7 +92,7 @@ public class QaMonitorTimer(
                 state.ResolvedEntries.Add(entry);
                 newTickets.Add(ticket);
 
-                if (await webhookService.SendResolvedAsync(ticket, url)) { sent++; entry.InitialNotified = true; }
+                if (await webhookService.SendResolvedAsync(ticket, url, teamTag)) { sent++; entry.InitialNotified = true; }
                 else failed++;
                 continue;
             }
@@ -108,7 +112,7 @@ public class QaMonitorTimer(
 
             if (firstReminderDue || subsequentReminderDue)
             {
-                if (await webhookService.SendReviewReminderAsync(ticket, url, elapsed))
+                if (await webhookService.SendReviewReminderAsync(ticket, url, elapsed, teamTag))
                 {
                     sent++;
                     entry.LastReminderAt = now;

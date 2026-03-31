@@ -51,4 +51,9 @@ public class TeamConfigService(IConfiguration config, ILogger<TeamConfigService>
         return (team is not null ? selector(team.Webhooks) : null)
                ?? selector(teamConfig.FallbackWebhooks);
     }
+
+    // Returns the matching TeamDefinition for a given assignee email, or null if not found.
+    public TeamDefinition? ResolveTeam(TeamConfig teamConfig, string assigneeEmail)
+        => teamConfig.Teams.FirstOrDefault(t =>
+            t.Members.Any(m => string.Equals(m, assigneeEmail, StringComparison.OrdinalIgnoreCase)));
 }

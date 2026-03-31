@@ -12,8 +12,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
 
     public async Task<bool> SendAsync(JiraTicket ticket, string webhookUrl)
     {
-
-        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+        var (mentionText, mentionEntry) = BuildMention(ticket);
+        var entities = mentionEntry is not null ? new[] { mentionEntry } : [];
 
         var body = new List<object>
         {
@@ -23,13 +23,14 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         };
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
 
-        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl)
+    public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl, TeamTag? teamTag = null)
     {
-        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+        var (mentionText, mentionEntry) = BuildMention(ticket);
+        var entities = BuildEntities(mentionEntry, teamTag);
 
         var body = new List<object>
         {
@@ -37,15 +38,18 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
+        if (teamTag is not null)
+            body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
 
-        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed)
+    public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed, TeamTag? teamTag = null)
     {
-        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+        var (mentionText, mentionEntry) = BuildMention(ticket);
+        var entities = BuildEntities(mentionEntry, teamTag);
 
         var body = new List<object>
         {
@@ -53,15 +57,17 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText, label: "👤 Author")
         };
+        if (teamTag is not null)
+            body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
 
-        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
     public async Task<bool> SendVerifiedAsync(JiraTicket ticket, string webhookUrl)
     {
-
-        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+        var (mentionText, mentionEntry) = BuildMention(ticket);
+        var entities = mentionEntry is not null ? new[] { mentionEntry } : [];
 
         var body = new List<object>
         {
@@ -81,14 +87,14 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             weight    = "Bolder"
         });
 
-        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
     public async Task<bool> SendClosedAsync(JiraTicket ticket, string webhookUrl)
     {
-
-        var (hasMention, mentionText, mentionEntry) = BuildMention(ticket);
+        var (mentionText, mentionEntry) = BuildMention(ticket);
+        var entities = mentionEntry is not null ? new[] { mentionEntry } : [];
 
         var body = new List<object>
         {
@@ -100,18 +106,29 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         if (ticket.StoryPoints.HasValue && ticket.StoryPoints.Value > 0)
             body.Add(BuildStoryPoints(ticket.StoryPoints.Value));
 
-        var payload = BuildPayload(hasMention, mentionEntry, body, ticket.Url);
+        var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
     // ── Shared card builders ──────────────────────────────────────────────────
 
-    private static (bool hasMention, string mentionText, object mentionEntry) BuildMention(JiraTicket ticket)
+    private static (string mentionText, object? mentionEntry) BuildMention(JiraTicket ticket)
     {
-        var has  = !string.IsNullOrEmpty(ticket.AssigneeEmail);
-        var text = has ? $"<at>{ticket.Assignee}</at>" : ticket.Assignee;
-        var entry = new { type = "mention", text = $"<at>{ticket.Assignee}</at>", mentioned = new { id = ticket.AssigneeEmail, name = ticket.Assignee } };
-        return (has, text, entry);
+        var has   = !string.IsNullOrEmpty(ticket.AssigneeEmail);
+        var text  = has ? $"<at>{ticket.Assignee}</at>" : ticket.Assignee;
+        var entry = has
+            ? (object?)new { type = "mention", text = $"<at>{ticket.Assignee}</at>", mentioned = new { id = ticket.AssigneeEmail, name = ticket.Assignee } }
+            : null;
+        return (text, entry);
+    }
+
+    private static object[] BuildEntities(object? assigneeMention, TeamTag? teamTag)
+    {
+        var list = new List<object>();
+        if (assigneeMention is not null) list.Add(assigneeMention);
+        if (teamTag is not null)
+            list.Add(new { type = "mention", text = $"<at>{teamTag.Name}</at>", mentioned = new { id = teamTag.Id, name = teamTag.Name } });
+        return list.ToArray();
     }
 
     private static object BuildHeader(string title, string subtitle, string style) => new
@@ -150,6 +167,17 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         }
     };
 
+    private static object BuildTeamTagRow(string tagMentionText) => new
+    {
+        type    = "ColumnSet",
+        spacing = "Small",
+        columns = new object[]
+        {
+            new { type = "Column", width = "auto",    items = new object[] { new { type = "TextBlock", text = "👥 Reviewers", weight = "Bolder", wrap = false } } },
+            new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = tagMentionText, wrap = false, horizontalAlignment = "Right", color = "Accent" } } }
+        }
+    };
+
     private static IEnumerable<object> BuildHistorySection(IReadOnlyList<StatusDuration> history)
     {
         var filtered = history
@@ -178,12 +206,12 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         }
     };
 
-    private static object BuildPayload(bool hasMention, object mentionEntry, List<object> body, string url) => new
+    private static object BuildPayload(object[] mentionEntities, List<object> body, string url) => new
     {
         type    = "AdaptiveCard",
         schema  = "http://adaptivecards.io/schemas/adaptive-card.json",
         version = "1.2",
-        msteams = hasMention ? (object)new { entities = new[] { mentionEntry } } : new { entities = Array.Empty<object>() },
+        msteams = new { entities = mentionEntities },
         body    = body.ToArray(),
         actions = new object[] { new { type = "Action.OpenUrl", title = "Open in Jira →", url, style = "positive" } }
     };

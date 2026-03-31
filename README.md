@@ -6,22 +6,24 @@ In teams that rely on Jira for task tracking and Microsoft Teams for communicati
 
 Manually checking Jira boards, setting up watchers, or relying on people to remember to notify the right person at the right time is error-prone and adds cognitive overhead.
 
-**Jira QA Monitor** solves this by automatically watching your Jira board and pushing targeted, beautiful Microsoft Teams notifications at every key transition — so the right person is pinged at the right moment, no manual effort required.
+**Jira QA Monitor** solves this by automatically watching your Jira board and pushing targeted Microsoft Teams notifications at every key transition — routing each card to the right team's channel and pinging the right person at the right moment, with no manual effort required.
 
 ---
 
-An Azure Timer Function that monitors a Jira project for tickets changing status and sends **Microsoft Teams Adaptive Card** notifications via Power Automate webhook.
+An Azure Timer Function that monitors a Jira project for ticket status changes and sends **Microsoft Teams Adaptive Card** notifications via Power Automate webhooks.
 
-**Three notification channels out of the box:**
-- 🔔 **Ready For QA** — notifies the team when a ticket is ready to be tested
-- ✅ **Verified** — notifies the assignee when a ticket is verified and ready to be closed (with a PR merge reminder)
+**Four notification types out of the box:**
+- 👀 **Resolved / In Review** — notifies the team when a ticket is in code review, with repeat reminders if it sits too long
+- 🔔 **Ready For QA** — notifies the QA team when a ticket is ready to be tested
+- ✅ **Verified** — notifies the assignee when a ticket is verified and ready to be closed
 - 🎉 **Closed** — celebrates the team when a ticket is shipped
 
 Each card includes:
 - `@mention` of the assignee (real Teams ping)
-- **Time spent in previous statuses** (e.g. In Progress: 3d 2h, Ready For QA: 4h 10m)
+- **Time spent in previous statuses** — weekend hours excluded, so only business time is counted
+- **Story Points** (Closed card only, shown if set)
 
-Tickets are tracked by state so each ticket is only notified **once per status**.
+Tickets are tracked by state so each ticket is only notified **once per status transition**.
 
 ---
 
@@ -30,18 +32,57 @@ Tickets are tracked by state so each ticket is only notified **once per status**
 ```
 Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
     │
-    ├─► Jira REST API        →  fetch tickets by status + changelog
-    ├─► Azure Blob Storage   →  load / save state.json
-    ├─► Power Automate Webhook (Ready For QA)  →  Teams card per new ticket
-    ├─► Power Automate Webhook (Verified)      →  Teams card per new ticket
-    └─► Power Automate Webhook (Closed)        →  Teams card per new ticket
+    ├─► Jira REST API          →  fetch tickets by status + full changelog
+    ├─► Azure Blob Storage
+    │       ├─ state.json      →  tracks seen ticket IDs + review entry times
+    │       ├─ teams.json      →  maps assignee emails to team webhook URLs
+    │       └─ settings.json   →  configures review reminder timing
+    │
+    ├─► Team routing           →  resolve webhook URL per assignee → team
+    ├─► Power Automate Webhook (Resolved / In Review)  →  Teams card per ticket + reminders
+    ├─► Power Automate Webhook (Ready For QA)          →  Teams card per ticket
+    ├─► Power Automate Webhook (Verified)              →  Teams card per ticket
+    └─► Power Automate Webhook (Closed)                →  Teams card per ticket
 ```
 
 ---
 
 ## Card Previews
 
-**🔔 Ready For QA** — `accent` blue background, white text
+**👀 In Review** — `emphasis` dark gray
+```
+┌──────────────────────────────────────────────┐
+│  👀  IN REVIEW — NEEDS YOUR EYES             │  ← gray header
+│  A PR is waiting for review                  │
+├──────────────────────────────────────────────┤
+│  PROJECT-123                                 │
+│  Short ticket summary here                   │
+├──────────────────────────────────────────────┤
+│  👤 Assignee              @John Smith        │
+├──────────────────────────────────────────────┤
+│  📊 Time in previous statuses                │
+│  In Progress              3d 2h              │
+├──────────────────────────────────────────────┤
+│  [ Open in Jira → ]                          │
+└──────────────────────────────────────────────┘
+```
+
+**⏰ Still In Review (reminder)** — `attention` red, fires after threshold + repeats on interval
+```
+┌──────────────────────────────────────────────┐
+│  ⏰  STILL IN REVIEW                         │  ← red header
+│  This ticket has been waiting 6h 30m         │  ← actual business hours elapsed
+├──────────────────────────────────────────────┤
+│  PROJECT-123                                 │
+│  Short ticket summary here                   │
+├──────────────────────────────────────────────┤
+│  👤 Author                @John Smith        │
+├──────────────────────────────────────────────┤
+│  [ Open in Jira → ]                          │
+└──────────────────────────────────────────────┘
+```
+
+**🔔 Ready For QA** — `accent` blue
 ```
 ┌──────────────────────────────────────────────┐
 │  🔔  READY FOR QA                            │  ← blue header
@@ -50,17 +91,17 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  PROJECT-123                                 │
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
-│  👤 Assignee              @John Smith        │  ← real Teams mention
+│  👤 Assignee              @John Smith        │
 ├──────────────────────────────────────────────┤
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
-│  Code Review              1d 4h              │
+│  Resolved.                1d 1h              │
 ├──────────────────────────────────────────────┤
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
 ```
 
-**✅ Verified** — `good` green background, dark text
+**✅ Verified** — `good` green
 ```
 ┌──────────────────────────────────────────────┐
 │  ✅  VERIFIED — READY TO CLOSE               │  ← green header
@@ -82,7 +123,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 └──────────────────────────────────────────────┘
 ```
 
-**🎉 Closed** — `warning` gold background, dark text
+**🎉 Closed** — `warning` gold
 ```
 ┌──────────────────────────────────────────────┐
 │  🎉  CLOSED — GREAT WORK!                    │  ← gold header
@@ -103,6 +144,91 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
 ```
+
+---
+
+## Team Routing
+
+Notifications are routed to **per-team channels** based on the ticket's assignee email. Upload a `teams.json` file to your blob container:
+
+```json
+{
+  "teams": [
+    {
+      "name": "FE",
+      "members": ["john@company.com", "anna@company.com"],
+      "webhooks": {
+        "resolved":   "https://power-automate-url-for-fe-channel",
+        "readyForQa": "https://power-automate-url-for-fe-channel",
+        "verified":   "https://power-automate-url-for-fe-channel",
+        "closed":     "https://power-automate-url-for-fe-channel"
+      }
+    },
+    {
+      "name": "BE",
+      "members": ["roman@company.com"],
+      "webhooks": {
+        "resolved":   "https://power-automate-url-for-be-channel",
+        "readyForQa": "https://power-automate-url-for-be-channel",
+        "verified":   "https://power-automate-url-for-be-channel",
+        "closed":     "https://power-automate-url-for-be-channel"
+      }
+    },
+    {
+      "name": "Mobile",
+      "members": ["heorhii@company.com"],
+      "webhooks": {
+        "resolved":   "https://power-automate-url-for-mobile-channel",
+        "readyForQa": "https://power-automate-url-for-mobile-channel",
+        "verified":   "https://power-automate-url-for-mobile-channel",
+        "closed":     "https://power-automate-url-for-mobile-channel"
+      }
+    },
+    {
+      "name": "QA",
+      "members": ["anastasiia@company.com"],
+      "webhooks": {
+        "resolved":   "https://power-automate-url-for-qa-channel",
+        "readyForQa": "https://power-automate-url-for-qa-channel",
+        "verified":   "https://power-automate-url-for-qa-channel",
+        "closed":     "https://power-automate-url-for-qa-channel"
+      }
+    }
+  ],
+  "fallbackWebhooks": {
+    "resolved":   "https://power-automate-url-for-general-channel",
+    "readyForQa": "https://power-automate-url-for-general-channel",
+    "verified":   "https://power-automate-url-for-general-channel",
+    "closed":     "https://power-automate-url-for-general-channel"
+  }
+}
+```
+
+- If the assignee matches a team → notification goes to that team's channel
+- If no match → `fallbackWebhooks` is used
+- No redeploy needed to add/change teams — just update `teams.json` in the blob
+
+---
+
+## Review Reminder
+
+Tickets that stay in `Resolved.` (In Review) too long trigger automatic follow-up cards. Configure via `settings.json` in your blob container:
+
+```json
+{
+  "reviewReminder": {
+    "thresholdHours": 4,
+    "intervalHours": 2
+  }
+}
+```
+
+| Setting | Description |
+|---------|-------------|
+| `thresholdHours` | Business hours in review before the first reminder fires |
+| `intervalHours` | Business hours between subsequent reminders |
+
+> Both values count **business hours only** — weekends are excluded. Defaults to 4h threshold / 2h interval if `settings.json` is not present.
 
 ---
 
@@ -135,9 +261,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
        "Jira__Project": "YOUR_PROJECT_KEY",
        "Jira__Username": "your-email@example.com",
        "Jira__ApiToken": "your-jira-api-token",
-       "Webhook__ReadyForQaUrl": "https://your-power-automate-webhook-url",
-       "Webhook__VerifiedUrl": "https://your-power-automate-webhook-url",
-       "Webhook__ClosedUrl": "https://your-power-automate-webhook-url",
+       "State__BlobConnectionString": "UseDevelopmentStorage=true",
        "State__ContainerName": "jira-qa-monitor"
      }
    }
@@ -148,13 +272,15 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
    npx azurite --silent --location .azurite
    ```
 
-4. **Run the function**:
+4. **Upload `teams.json` and `settings.json`** to the local Azurite blob container
+
+5. **Run the function**:
    ```bash
    dotnet build
    func start
    ```
 
-5. **Trigger manually** (without waiting 15 min):
+6. **Trigger manually** (without waiting 15 min):
    ```bash
    curl -X POST http://localhost:7071/admin/functions/QaMonitorTimer \
      -H "Content-Type: application/json" \
@@ -168,6 +294,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 ### 1. Create a Storage Account
 - Create a **Storage Account** in your resource group (LRS is enough)
 - Inside it, create a **Blob Container** named `jira-qa-monitor`
+- Upload `teams.json` and `settings.json` to the container
 
 ### 2. Create a Function App
 - **Runtime:** .NET 8 (isolated worker)
@@ -184,12 +311,10 @@ Go to **Function App → Settings → Environment variables** and add:
 | `Jira__Project` | your Jira project key |
 | `Jira__Username` | your Jira email |
 | `Jira__ApiToken` | your Jira API token |
-| `Webhook__ReadyForQaUrl` | Power Automate webhook for Ready For QA channel |
-| `Webhook__VerifiedUrl` | Power Automate webhook for Verified channel |
-| `Webhook__ClosedUrl` | Power Automate webhook for Closed channel |
 | `State__BlobConnectionString` | connection string of your storage account |
 | `State__ContainerName` | `jira-qa-monitor` |
-| `State__BlobName` | `state.json` |
+
+> Webhook URLs are configured in `teams.json` — no webhook env vars needed.
 
 ### 4. Build & Deploy
 ```bash
@@ -199,7 +324,7 @@ cd publish && zip -r ../deploy.zip . && cd ..
 
 Then in the Azure Portal go to **Function App → Development Tools → Advanced Tools → Kudu → Tools → Zip Push Deploy** and drag & drop `deploy.zip`.
 
-> **Note:** Kudu is available on Consumption and Premium plans. It is not available on Flex Consumption.
+> **Note:** Kudu is available on Consumption and Premium plans. It is **not** available on Flex Consumption.
 
 ### 5. Verify
 Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invocation logs.
@@ -208,31 +333,39 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 
 ## Configuration Reference
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `Jira__BaseUrl` | Jira instance root URL | — |
-| `Jira__Project` | Jira project key | — |
-| `Jira__Username` | Jira account email | — |
-| `Jira__ApiToken` | Jira API token | — |
-| `Webhook__ReadyForQaUrl` | Teams webhook for Ready For QA notifications | — |
-| `Webhook__VerifiedUrl` | Teams webhook for Verified notifications | — |
-| `Webhook__ClosedUrl` | Teams webhook for Closed notifications | — |
-| `State__BlobConnectionString` | Azure Storage connection string | — |
-| `State__ContainerName` | Blob container name | `jira-qa-monitor` |
+### Environment Variables
+
+| Setting | Description |
+|---------|-------------|
+| `Jira__BaseUrl` | Jira instance root URL |
+| `Jira__Project` | Jira project key to monitor |
+| `Jira__Username` | Jira account email |
+| `Jira__ApiToken` | Jira API token |
+| `State__BlobConnectionString` | Azure Storage connection string |
+| `State__ContainerName` | Blob container name (default: `jira-qa-monitor`) |
+
+### Blob Files
+
+| File | Purpose |
+|------|---------|
+| `state.json` | Auto-managed — tracks seen ticket IDs and review entry times |
+| `teams.json` | Team definitions, member emails, and per-team webhook URLs |
+| `settings.json` | Review reminder threshold and interval (business hours) |
 
 ---
 
 ## Customization
 
-All monitoring rules live in `Services/JiraService.cs` and can be freely adjusted to match your team's workflow.
+All monitoring rules live in `Services/JiraService.cs`.
 
 **Tracked issue types** — by default: `Bug`, `Improvement`, `Story`, `Spike`:
 ```csharp
 AND issuetype in (Bug, Improvement, Story, Spike)
 ```
 
-**Monitored statuses** — the three tracked statuses map directly to your Jira workflow names. If your board uses different status names (e.g. `"In Review"` instead of `"Ready For QA"`, or `"Done"` instead of `"Closed"`), just update the strings passed to `QueryTicketsAsync`:
+**Monitored statuses** — map directly to your Jira workflow names. Update if your board uses different names:
 ```csharp
+public Task<List<JiraTicket>> GetResolvedTicketsAsync()   => QueryTicketsAsync("Resolved.", ...);
 public Task<List<JiraTicket>> GetReadyForQaTicketsAsync() => QueryTicketsAsync("Ready For QA", ...);
 public Task<List<JiraTicket>> GetVerifiedTicketsAsync()   => QueryTicketsAsync("Verified", ...);
 public Task<List<JiraTicket>> GetClosedTicketsAsync()     => QueryTicketsAsync("Closed", ...);
@@ -242,7 +375,7 @@ public Task<List<JiraTicket>> GetClosedTicketsAsync()     => QueryTicketsAsync("
 ```csharp
 AND sprint in openSprints()
 ```
-Remove this clause if you want to track tickets across all sprints.
+Remove this clause to track tickets across all sprints.
 
 ---
 
@@ -259,23 +392,32 @@ To change the schedule, update the cron expression in `Functions/QaMonitorTimer.
 
 ## State File
 
-Stored in Azure Blob Storage at `{container}/state.json`:
+Auto-managed in Azure Blob Storage at `{container}/state.json`:
 ```json
 {
   "readyForQaIds": ["PROJECT-123", "PROJECT-456"],
-  "verifiedIds":   ["PROJECT-100", "PROJECT-101"],
-  "closedIds":     ["PROJECT-090", "PROJECT-091"]
+  "resolvedEntries": [
+    {
+      "key": "PROJECT-789",
+      "enteredAt": "2026-03-31T09:00:00Z",
+      "initialNotified": true,
+      "lastReminderAt": "2026-03-31T13:00:00Z"
+    }
+  ],
+  "verifiedIds": ["PROJECT-100"],
+  "closedIds":   ["PROJECT-090", "PROJECT-091"]
 }
 ```
 
-- `readyForQaIds` and `verifiedIds` are replaced on each run with the current active set — if a ticket leaves and returns to a status it will be notified again.
-- `closedIds` only ever grows — closed tickets are never re-notified.
+- `readyForQaIds` and `verifiedIds` — replaced on each run. If a ticket leaves and returns to the status it will be notified again.
+- `resolvedEntries` — replaced on each run. Tracks entry time and last reminder timestamp per ticket.
+- `closedIds` — only ever grows. Closed tickets are never re-notified.
 
 ---
 
 ## Security Recommendations
 
-- Store `Jira__ApiToken` and webhook URLs in **Azure Key Vault** and reference via `@Microsoft.KeyVault(...)` app setting syntax
+- Store `Jira__ApiToken` in **Azure Key Vault** and reference via `@Microsoft.KeyVault(...)` app setting syntax
 - Enable **Managed Identity** on the Function App for Key Vault access
 - Never commit `local.settings.json` to source control — it is already in `.gitignore`
 

@@ -187,11 +187,17 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
     private static IEnumerable<object> BuildPrSection(IReadOnlyList<PullRequestInfo> prs)
     {
         yield return new { type = "TextBlock", text = "🔀 Pull Requests", weight = "Bolder", spacing = "Medium", separator = true };
-        yield return new
-        {
-            type  = "FactSet",
-            facts = prs.Select(pr => new { title = pr.RepoName, value = $"[PR #{pr.PrNumber}]({pr.Url})" }).ToArray()
-        };
+        foreach (var pr in prs)
+            yield return new
+            {
+                type    = "ColumnSet",
+                spacing = "Small",
+                columns = new object[]
+                {
+                    new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = pr.RepoName, wrap = false } } },
+                    new { type = "Column", width = "auto",    items = new object[] { new { type = "TextBlock", text = $"[PR #{pr.PrNumber}]({pr.Url})", wrap = false, horizontalAlignment = "Right", color = "Accent" } } }
+                }
+            };
     }
 
     private static IEnumerable<object> BuildHistorySection(IReadOnlyList<StatusDuration> history)

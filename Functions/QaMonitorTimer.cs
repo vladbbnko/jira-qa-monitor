@@ -80,9 +80,10 @@ public class QaMonitorTimer(
 
             var entry = state.ResolvedEntries.FirstOrDefault(e => e.Key == ticket.Key);
 
-            var teamTag = teamConfig is not null
+            var resolvedTag = teamConfig is not null
                 ? teamConfigService.ResolveTeam(teamConfig, ticket.AssigneeEmail)?.ResolvedTag
                 : null;
+            var teamTag = string.IsNullOrWhiteSpace(resolvedTag?.Name) ? null : resolvedTag;
 
             if (entry is null)
             {

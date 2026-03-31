@@ -17,7 +17,18 @@ public class JiraService(HttpClient httpClient, IConfiguration config, ILogger<J
         => await QueryTicketsAsync("Ready For QA", includeHistory: true);
 
     public async Task<List<JiraTicket>> GetVerifiedTicketsAsync()
-        => await QueryTicketsAsync("Verified", includeHistory: true);
+    {
+        var tickets = await QueryTicketsAsync("Verified", includeHistory: true);
+        var (baseUrl, credentials) = GetConnectionParams();
+
+        var enriched = await Task.WhenAll(tickets.Select(async ticket =>
+        {
+            var prs = await FetchPullRequestsAsync(baseUrl, credentials, ticket.Key);
+            return ticket with { PullRequests = prs };
+        }));
+
+        return [.. enriched];
+    }
 
     public async Task<List<JiraTicket>> GetResolvedTicketsAsync()
     {

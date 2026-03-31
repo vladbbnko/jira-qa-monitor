@@ -30,8 +30,7 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
     public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl, TeamTag? teamTag = null)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        // TODO: restore teamTag once Teams tag IDs are configured and Reviewers row is re-enabled
-        var entities = BuildEntities(mentionEntry, null);
+        var entities = BuildEntities(mentionEntry, teamTag);
 
         var body = new List<object>
         {
@@ -39,9 +38,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        // TODO: re-enable once Teams tag IDs are configured
-        // if (teamTag is not null)
-        //     body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
+        if (teamTag is not null)
+            body.Add(BuildTeamTagRow($"@{teamTag.Name}"));
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
         if (ticket.PullRequests.Count > 0)
             body.AddRange(BuildPrSection(ticket.PullRequests));
@@ -53,8 +51,7 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
     public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed, TeamTag? teamTag = null)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        // TODO: restore teamTag once Teams tag IDs are configured and Reviewers row is re-enabled
-        var entities = BuildEntities(mentionEntry, null);
+        var entities = BuildEntities(mentionEntry, teamTag);
 
         var body = new List<object>
         {
@@ -62,9 +59,10 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        // TODO: re-enable once Teams tag IDs are configured
-        // if (teamTag is not null)
-        //     body.Add(BuildTeamTagRow($"<at>{teamTag.Name}</at>"));
+        if (teamTag is not null)
+            body.Add(BuildTeamTagRow($"@{teamTag.Name}"));
+        if (ticket.PullRequests.Count > 0)
+            body.AddRange(BuildPrSection(ticket.PullRequests));
 
         var payload = BuildPayload(entities, body, ticket.Url);
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
@@ -82,6 +80,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildAssigneeRow(mentionText)
         };
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
+        if (ticket.PullRequests.Count > 0)
+            body.AddRange(BuildPrSection(ticket.PullRequests));
         body.Add(new
         {
             type      = "TextBlock",

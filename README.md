@@ -21,6 +21,8 @@ An Azure Timer Function that monitors a Jira project for ticket status changes a
 Each card includes:
 - `@mention` of the assignee (real Teams ping)
 - **Time spent in previous statuses** — weekend hours excluded, so only business time is counted
+- **Pull Requests** — extracted from Jira comments (Azure DevOps URLs), shown on In Review, Still In Review, and Verified cards
+- **Reviewer group tag** — optional `@TeamTag` shown on In Review and Still In Review cards (configured per team in `teams.json`)
 - **Story Points** (Closed card only, shown if set)
 
 Tickets are tracked by state so each ticket is only notified **once per status transition**.
@@ -59,10 +61,13 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
 │  👤 Assignee              @John Smith        │
-│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag set in teams.json
+│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag.name set in teams.json
 ├──────────────────────────────────────────────┤
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
+├──────────────────────────────────────────────┤
+│  🔀 Pull Requests                            │  ← extracted from Jira comments
+│  repo-name                      PR #123      │
 ├──────────────────────────────────────────────┤
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
@@ -78,7 +83,10 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
 │  👤 Assignee              @John Smith        │
-│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag set in teams.json
+│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag.name set in teams.json
+├──────────────────────────────────────────────┤
+│  🔀 Pull Requests                            │
+│  repo-name                      PR #123      │
 ├──────────────────────────────────────────────┤
 │  [ Open in Jira → ]                          │
 └──────────────────────────────────────────────┘
@@ -117,6 +125,9 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
 │  Ready For QA             4h 10m             │
+├──────────────────────────────────────────────┤
+│  🔀 Pull Requests                            │  ← extracted from Jira comments
+│  repo-name                      PR #123      │
 ├──────────────────────────────────────────────┤
 │  🔀 Please merge all related PRs             │
 │     before closing this ticket               │
@@ -159,6 +170,10 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
     {
       "name": "FE",
       "members": ["john@company.com", "anna@company.com"],
+      "resolvedTag": {
+        "name": "CoreFE",
+        "id": "tag:YOUR_TAG_ID"
+      },
       "webhooks": {
         "resolved":   "https://power-automate-url-for-fe-channel",
         "readyForQa": "https://power-automate-url-for-fe-channel",
@@ -169,6 +184,10 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
     {
       "name": "BE",
       "members": ["roman@company.com"],
+      "resolvedTag": {
+        "name": "CoreBE",
+        "id": "tag:YOUR_TAG_ID"
+      },
       "webhooks": {
         "resolved":   "https://power-automate-url-for-be-channel",
         "readyForQa": "https://power-automate-url-for-be-channel",
@@ -208,7 +227,12 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
 
 - If the assignee matches a team → notification goes to that team's channel
 - If no match → `fallbackWebhooks` is used
+- `resolvedTag` is optional — omit it or leave `name` empty to skip the Reviewers row
 - No redeploy needed to add/change teams — just update `teams.json` in the blob
+
+### Pull Requests
+
+Azure DevOps PR links are automatically extracted from Jira ticket comments and displayed on **In Review**, **Still In Review**, and **Verified** cards. No configuration needed — the function scans all comments for `dev.azure.com/.../pullrequest/{id}` URLs and deduplicates them by URL.
 
 ---
 

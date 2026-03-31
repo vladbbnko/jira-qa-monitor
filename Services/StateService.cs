@@ -18,9 +18,7 @@ public class StateService(IConfiguration config, ILogger<StateService> logger)
         var containerName    = config["State__ContainerName"]
                                ?? Environment.GetEnvironmentVariable("State__ContainerName")
                                ?? "jira-qa-monitor";
-        var blobName         = config["State__BlobName"]
-                               ?? Environment.GetEnvironmentVariable("State__BlobName")
-                               ?? "state.json";
+        const string blobName = "state.json";
 
         var containerClient = new BlobContainerClient(connectionString, containerName);
         containerClient.CreateIfNotExists();

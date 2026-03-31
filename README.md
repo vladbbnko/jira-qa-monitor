@@ -138,8 +138,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
        "Webhook__ReadyForQaUrl": "https://your-power-automate-webhook-url",
        "Webhook__VerifiedUrl": "https://your-power-automate-webhook-url",
        "Webhook__ClosedUrl": "https://your-power-automate-webhook-url",
-       "State__ContainerName": "jira-qa-monitor",
-       "State__BlobName": "state.json"
+       "State__ContainerName": "jira-qa-monitor"
      }
    }
    ```
@@ -220,7 +219,6 @@ Go to **Function App → Functions → QaMonitorTimer → Monitor** to see invoc
 | `Webhook__ClosedUrl` | Teams webhook for Closed notifications | — |
 | `State__BlobConnectionString` | Azure Storage connection string | — |
 | `State__ContainerName` | Blob container name | `jira-qa-monitor` |
-| `State__BlobName` | State file name | `state.json` |
 
 ---
 

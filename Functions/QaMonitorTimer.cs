@@ -24,7 +24,7 @@ public class QaMonitorTimer(
         var teamConfig = await teamConfigService.LoadAsync();
         var settings   = await settingsService.LoadAsync();
 
-        await ProcessReadyForQaAsync(state, teamConfig);
+        await ProcessReadyForQaAsync(state, teamConfig, settings);
         await ProcessResolvedAsync(state, teamConfig, settings);
         await ProcessVerifiedAsync(state, teamConfig);
         await ProcessClosedAsync(state, teamConfig);
@@ -34,11 +34,17 @@ public class QaMonitorTimer(
 
     // ── Ready For QA ──────────────────────────────────────────────────────────
 
-    private async Task ProcessReadyForQaAsync(MonitorState state, TeamConfig? teamConfig)
+    private async Task ProcessReadyForQaAsync(MonitorState state, TeamConfig? teamConfig, AppSettings settings)
     {
         List<Models.JiraTicket> tickets;
         try   { tickets = await jiraService.GetReadyForQaTicketsAsync(); }
         catch (Exception ex) { logger.LogError(ex, "Jira [Ready For QA] search failed"); return; }
+
+        if (settings.ExcludedSummaryKeywords.Count > 0)
+            tickets = tickets
+                .Where(t => !settings.ExcludedSummaryKeywords
+                    .Any(kw => t.Summary.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
         var currentKeys = tickets.Select(t => t.Key).ToHashSet();
         var newTickets  = tickets.Where(t => !state.ReadyForQaIds.Contains(t.Key)).ToList();

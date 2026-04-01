@@ -36,7 +36,8 @@ public class MonitorState
 
 public class AppSettings
 {
-    public ReviewReminderSettings ReviewReminder { get; set; } = new();
+    public ReviewReminderSettings ReviewReminder       { get; set; } = new();
+    public List<string>           ExcludedSummaryKeywords { get; set; } = [];
 }
 
 public class ReviewReminderSettings

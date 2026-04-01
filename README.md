@@ -22,7 +22,7 @@ Each card includes:
 - `@mention` of the assignee (real Teams ping)
 - **Time spent in previous statuses** — weekend hours excluded, so only business time is counted
 - **Pull Requests** — extracted from Jira comments (Azure DevOps URLs), shown on In Review, Still In Review, and Verified cards
-- **Reviewer group tag** — optional `@TeamTag` shown on In Review and Still In Review cards (configured per team in `teams.json`)
+- **Hidden team mentions** — all non-assignee team members are silently mentioned on In Review and Still In Review cards, triggering real Teams notifications without cluttering the card UI
 - **Story Points** (Closed card only, shown if set)
 
 Tickets are tracked by state so each ticket is only notified **once per status transition**.
@@ -61,7 +61,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
 │  👤 Assignee              @John Smith        │
-│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag.name set in teams.json
+│  [hidden: @Alice @Bob @Carol]                │  ← silent pings to other team members
 ├──────────────────────────────────────────────┤
 │  📊 Time in previous statuses                │
 │  In Progress              3d 2h              │
@@ -83,7 +83,7 @@ Azure Timer Function (every 15 min, weekdays 6 AM–6 PM UTC)
 │  Short ticket summary here                   │
 ├──────────────────────────────────────────────┤
 │  👤 Assignee              @John Smith        │
-│  👥 Reviewers                 @CoreBE        │  ← only if resolvedTag.name set in teams.json
+│  [hidden: @Alice @Bob @Carol]                │  ← silent pings to other team members
 ├──────────────────────────────────────────────┤
 │  🔀 Pull Requests                            │
 │  repo-name                      PR #123      │
@@ -168,26 +168,11 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
 {
   "teams": [
     {
-      "name": "FE",
-      "members": ["john@company.com", "anna@company.com"],
-      "resolvedTag": {
-        "name": "CoreFE",
-        "id": "tag:YOUR_TAG_ID"
-      },
-      "webhooks": {
-        "resolved":   "https://power-automate-url-for-fe-channel",
-        "readyForQa": "https://power-automate-url-for-fe-channel",
-        "verified":   "https://power-automate-url-for-fe-channel",
-        "closed":     "https://power-automate-url-for-fe-channel"
-      }
-    },
-    {
       "name": "BE",
-      "members": ["roman@company.com"],
-      "resolvedTag": {
-        "name": "CoreBE",
-        "id": "tag:YOUR_TAG_ID"
-      },
+      "members": [
+        { "email": "john@company.com",  "displayName": "John Smith",  "aadObjectId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+        { "email": "roman@company.com", "displayName": "Roman Jones", "aadObjectId": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy" }
+      ],
       "webhooks": {
         "resolved":   "https://power-automate-url-for-be-channel",
         "readyForQa": "https://power-automate-url-for-be-channel",
@@ -196,18 +181,10 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
       }
     },
     {
-      "name": "Mobile",
-      "members": ["heorhii@company.com"],
-      "webhooks": {
-        "resolved":   "https://power-automate-url-for-mobile-channel",
-        "readyForQa": "https://power-automate-url-for-mobile-channel",
-        "verified":   "https://power-automate-url-for-mobile-channel",
-        "closed":     "https://power-automate-url-for-mobile-channel"
-      }
-    },
-    {
       "name": "QA",
-      "members": ["anastasiia@company.com"],
+      "members": [
+        { "email": "anna@company.com", "displayName": "Anna Brown", "aadObjectId": "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz" }
+      ],
       "webhooks": {
         "resolved":   "https://power-automate-url-for-qa-channel",
         "readyForQa": "https://power-automate-url-for-qa-channel",
@@ -225,9 +202,10 @@ Notifications are routed to **per-team channels** based on the ticket's assignee
 }
 ```
 
-- If the assignee matches a team → notification goes to that team's channel
-- If no match → `fallbackWebhooks` is used
-- `resolvedTag` is optional — omit it or leave `name` empty to skip the Reviewers row
+- Each member needs `email`, `displayName`, and `aadObjectId` (Azure AD Object ID — the GUID from Teams)
+- Members with an empty `aadObjectId` are skipped for mentions but still used for team routing
+- If the assignee matches a team → notification goes to that team's channel; all other team members receive a silent ping
+- If no match → `fallbackWebhooks` is used, no hidden mentions sent
 - No redeploy needed to add/change teams — just update `teams.json` in the blob
 
 ### Pull Requests

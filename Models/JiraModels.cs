@@ -53,16 +53,16 @@ public class TeamConfig
 
 public class TeamDefinition
 {
-    public string            Name        { get; set; } = string.Empty;
-    public List<string>      Members     { get; set; } = [];
-    public TeamWebhooks      Webhooks    { get; set; } = new();
-    public TeamTag?          ResolvedTag { get; set; }
+    public string            Name     { get; set; } = string.Empty;
+    public List<TeamMember>  Members  { get; set; } = [];
+    public TeamWebhooks      Webhooks { get; set; } = new();
 }
 
-public class TeamTag
+public class TeamMember
 {
-    public string Name { get; set; } = string.Empty;
-    public string Id   { get; set; } = string.Empty;
+    public string Email         { get; set; } = string.Empty;
+    public string DisplayName   { get; set; } = string.Empty;
+    public string AadObjectId   { get; set; } = string.Empty;
 }
 
 public class TeamWebhooks

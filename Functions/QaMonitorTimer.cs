@@ -16,7 +16,7 @@ public class QaMonitorTimer(
     ILogger<QaMonitorTimer> logger)
 {
     [Function(nameof(QaMonitorTimer))]
-    public async Task Run([TimerTrigger("0 */15 6-18 * * 1-5")] TimerInfo timerInfo)
+    public async Task Run([TimerTrigger("0 */15 9-19 * * 1-5")] TimerInfo timerInfo)
     {
         logger.LogInformation("QA Monitor started at {Time}", DateTimeOffset.UtcNow);
 
@@ -80,10 +80,9 @@ public class QaMonitorTimer(
 
             var entry = state.ResolvedEntries.FirstOrDefault(e => e.Key == ticket.Key);
 
-            var resolvedTag = teamConfig is not null
-                ? teamConfigService.ResolveTeam(teamConfig, ticket.AssigneeEmail)?.ResolvedTag
-                : null;
-            var teamTag = string.IsNullOrWhiteSpace(resolvedTag?.Name) ? null : resolvedTag;
+            var otherMembers = teamConfig is not null
+                ? teamConfigService.GetOtherMembers(teamConfig, ticket.AssigneeEmail)
+                : [];
 
             if (entry is null)
             {
@@ -93,7 +92,7 @@ public class QaMonitorTimer(
                 state.ResolvedEntries.Add(entry);
                 newTickets.Add(ticket);
 
-                if (await webhookService.SendResolvedAsync(ticket, url, teamTag)) { sent++; entry.InitialNotified = true; }
+                if (await webhookService.SendResolvedAsync(ticket, url, otherMembers)) { sent++; entry.InitialNotified = true; }
                 else failed++;
                 continue;
             }
@@ -113,7 +112,7 @@ public class QaMonitorTimer(
 
             if (firstReminderDue || subsequentReminderDue)
             {
-                if (await webhookService.SendReviewReminderAsync(ticket, url, elapsed, teamTag))
+                if (await webhookService.SendReviewReminderAsync(ticket, url, elapsed, otherMembers))
                 {
                     sent++;
                     entry.LastReminderAt = now;

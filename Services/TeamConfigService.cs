@@ -45,15 +45,24 @@ public class TeamConfigService(IConfiguration config, ILogger<TeamConfigService>
     // Priority: matching team webhook → fallback webhook → null
     public string? ResolveWebhook(TeamConfig teamConfig, string assigneeEmail, Func<TeamWebhooks, string?> selector)
     {
-        var team = teamConfig.Teams.FirstOrDefault(t =>
-            t.Members.Any(m => string.Equals(m, assigneeEmail, StringComparison.OrdinalIgnoreCase)));
-
+        var team = FindTeam(teamConfig, assigneeEmail);
         return (team is not null ? selector(team.Webhooks) : null)
                ?? selector(teamConfig.FallbackWebhooks);
     }
 
-    // Returns the matching TeamDefinition for a given assignee email, or null if not found.
-    public TeamDefinition? ResolveTeam(TeamConfig teamConfig, string assigneeEmail)
+    // Returns all team members except the assignee, with a non-empty aadObjectId.
+    public List<TeamMember> GetOtherMembers(TeamConfig teamConfig, string assigneeEmail)
+    {
+        var team = FindTeam(teamConfig, assigneeEmail);
+        if (team is null) return [];
+
+        return team.Members
+            .Where(m => !string.Equals(m.Email, assigneeEmail, StringComparison.OrdinalIgnoreCase)
+                     && !string.IsNullOrWhiteSpace(m.AadObjectId))
+            .ToList();
+    }
+
+    private static TeamDefinition? FindTeam(TeamConfig teamConfig, string assigneeEmail)
         => teamConfig.Teams.FirstOrDefault(t =>
-            t.Members.Any(m => string.Equals(m, assigneeEmail, StringComparison.OrdinalIgnoreCase)));
+            t.Members.Any(m => string.Equals(m.Email, assigneeEmail, StringComparison.OrdinalIgnoreCase)));
 }

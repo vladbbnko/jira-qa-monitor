@@ -27,10 +27,10 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl, TeamTag? teamTag = null)
+    public async Task<bool> SendResolvedAsync(JiraTicket ticket, string webhookUrl, List<TeamMember> otherMembers)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        var entities = BuildEntities(mentionEntry, teamTag);
+        var entities = BuildEntities(mentionEntry, otherMembers);
 
         var body = new List<object>
         {
@@ -38,8 +38,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        if (teamTag is not null)
-            body.Add(BuildTeamTagRow($"@{teamTag.Name}"));
+        if (otherMembers.Count > 0)
+            body.Add(BuildHiddenMentions(otherMembers));
         body.AddRange(BuildHistorySection(ticket.StatusHistory));
         if (ticket.PullRequests.Count > 0)
             body.AddRange(BuildPrSection(ticket.PullRequests));
@@ -48,10 +48,10 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         return await PostCardAsync(webhookUrl, payload, ticket.Key);
     }
 
-    public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed, TeamTag? teamTag = null)
+    public async Task<bool> SendReviewReminderAsync(JiraTicket ticket, string webhookUrl, TimeSpan elapsed, List<TeamMember> otherMembers)
     {
         var (mentionText, mentionEntry) = BuildMention(ticket);
-        var entities = BuildEntities(mentionEntry, teamTag);
+        var entities = BuildEntities(mentionEntry, otherMembers);
 
         var body = new List<object>
         {
@@ -59,8 +59,8 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
             BuildTicketBlock(ticket),
             BuildAssigneeRow(mentionText)
         };
-        if (teamTag is not null)
-            body.Add(BuildTeamTagRow($"@{teamTag.Name}"));
+        if (otherMembers.Count > 0)
+            body.Add(BuildHiddenMentions(otherMembers));
         if (ticket.PullRequests.Count > 0)
             body.AddRange(BuildPrSection(ticket.PullRequests));
 
@@ -128,14 +128,22 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         return (text, entry);
     }
 
-    private static object[] BuildEntities(object? assigneeMention, TeamTag? teamTag)
+    private static object[] BuildEntities(object? assigneeMention, List<TeamMember> otherMembers)
     {
         var list = new List<object>();
         if (assigneeMention is not null) list.Add(assigneeMention);
-        if (teamTag is not null)
-            list.Add(new { type = "mention", text = $"<at>{teamTag.Name}</at>", mentioned = new { id = teamTag.Id, name = teamTag.Name } });
+        foreach (var m in otherMembers)
+            list.Add(new { type = "mention", text = $"<at>{m.DisplayName}</at>", mentioned = new { id = $"8:orgid:{m.AadObjectId}", name = m.DisplayName } });
         return list.ToArray();
     }
+
+    private static object BuildHiddenMentions(List<TeamMember> members) => new
+    {
+        type      = "TextBlock",
+        text      = string.Join(" ", members.Select(m => $"<at>{m.DisplayName}</at>")),
+        isVisible = false,
+        wrap      = true
+    };
 
     private static object BuildHeader(string title, string subtitle, string style) => new
     {
@@ -173,18 +181,7 @@ public class WebhookService(HttpClient httpClient, ILogger<WebhookService> logge
         }
     };
 
-    private static object BuildTeamTagRow(string tagMentionText) => new
-    {
-        type    = "ColumnSet",
-        spacing = "Small",
-        columns = new object[]
-        {
-            new { type = "Column", width = "auto",    items = new object[] { new { type = "TextBlock", text = "👥 Reviewers", weight = "Bolder", wrap = false } } },
-            new { type = "Column", width = "stretch", items = new object[] { new { type = "TextBlock", text = tagMentionText, wrap = false, horizontalAlignment = "Right", color = "Accent" } } }
-        }
-    };
-
-    private static IEnumerable<object> BuildPrSection(IReadOnlyList<PullRequestInfo> prs)
+private static IEnumerable<object> BuildPrSection(IReadOnlyList<PullRequestInfo> prs)
     {
         yield return new { type = "TextBlock", text = "🔀 Pull Requests", weight = "Bolder", spacing = "Medium", separator = true };
         foreach (var pr in prs)

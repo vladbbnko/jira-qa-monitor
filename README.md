@@ -407,11 +407,11 @@ Remove this clause to track tickets across all sprints.
 
 ## Schedule
 
-Runs every **15 minutes on weekdays between 6 AM and 6 PM UTC**.
+Runs every **15 minutes on weekdays between 9 AM and 7 PM Kyiv time** (requires `WEBSITE_TIME_ZONE` = `Europe/Kiev` set in Azure Function App environment variables).
 
 To change the schedule, update the cron expression in `Functions/QaMonitorTimer.cs`:
 ```csharp
-[TimerTrigger("0 */15 6-18 * * 1-5")]
+[TimerTrigger("0 */15 9-19 * * 1-5")]
 ```
 
 ---

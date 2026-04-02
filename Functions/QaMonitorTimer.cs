@@ -16,7 +16,7 @@ public class QaMonitorTimer(
     ILogger<QaMonitorTimer> logger)
 {
     [Function(nameof(QaMonitorTimer))]
-    public async Task Run([TimerTrigger("0 */15 9-19 * * 1-5")] TimerInfo timerInfo)
+    public async Task Run([TimerTrigger("0 */15 6-16 * * 1-5")] TimerInfo timerInfo)
     {
         logger.LogInformation("QA Monitor started at {Time}", DateTimeOffset.UtcNow);
 
